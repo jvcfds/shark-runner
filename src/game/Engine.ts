@@ -13,36 +13,40 @@ export type EngineHooks = {
 }
 
 export class Engine {
-  private ctx: CanvasRenderingContext2D
-  private raf = 0
-  private running = false
-  private lastTime = 0
+  ctx: CanvasRenderingContext2D
+  raf = 0
+  running = false
+  lastTime = 0
 
-  private shark = new Shark()
-  private obstacles: Obstacle[] = []
-  private coins: Coin[] = []
-  private particles = new ParticleSystem()
+  shark = new Shark()
+  obstacles: Obstacle[] = []
+  coins: Coin[] = []
+  particles = new ParticleSystem()
 
-  private score = 0
-  private coinsCollected = 0
-  private speed = 250
-  private spawnTimer = 0
-  private soundsReady = false
-  private lastSpeedMilestone = 0
+  score = 0
+  coinsCollected = 0
+  speed = 250
+  spawnTimer = 0
+  soundsReady = false
+  lastSpeedMilestone = 0
 
-  constructor(private canvas: HTMLCanvasElement, private hooks: EngineHooks) {
+  constructor(canvas: HTMLCanvasElement, hooks: EngineHooks) {
     const ctx = canvas.getContext('2d')
     if (!ctx) throw new Error('Canvas 2D não suportado')
     this.ctx = ctx
+    this.canvas = canvas
+    this.hooks = hooks
     this.handleInput = this.handleInput.bind(this)
   }
+
+  canvas: HTMLCanvasElement
+  hooks: EngineHooks
 
   async start() {
     this.running = true
     this.lastTime = performance.now()
     window.addEventListener('keydown', this.handleInput)
 
-    // Inicializa áudio e música
     await initSounds().catch(() => {})
     this.soundsReady = true
     playBackgroundMusic()
@@ -56,14 +60,14 @@ export class Engine {
     stopBackgroundMusic()
   }
 
-  private handleInput(e: KeyboardEvent) {
+  handleInput(e: KeyboardEvent) {
     if (e.code === 'Space' || e.code === 'ArrowUp') {
       const jumped = this.shark.tryJump()
       if (jumped && this.soundsReady) playSound('jump', 0.7)
     }
   }
 
-  private loop = () => {
+  loop = () => {
     this.raf = requestAnimationFrame(this.loop)
     const now = performance.now()
     const dt = Math.min(0.033, (now - this.lastTime) / 1000)
@@ -73,7 +77,7 @@ export class Engine {
     this.draw()
   }
 
-  private update(dt: number) {
+  update(dt: number) {
     this.shark.update(dt)
 
     // === Obstáculos ===
@@ -90,7 +94,7 @@ export class Engine {
 
     // === Moedas organizadas ===
     if (Math.random() < 0.006) {
-      const groupSize = 3 + Math.floor(Math.random() * 2) // 3 a 4 moedas
+      const groupSize = 3 + Math.floor(Math.random() * 2)
       const baseY = 180 - Math.random() * 40
       const spacingX = 32
       const spacingY = 12
@@ -109,7 +113,6 @@ export class Engine {
     this.score += Math.floor(dt * 100)
     this.hooks.onScore?.(this.score)
 
-    // aumenta a velocidade a cada 500 pontos até 3500
     const milestone = Math.floor(this.score / 500)
     if (milestone > this.lastSpeedMilestone && this.score < 3500) {
       this.speed += 10
@@ -121,13 +124,12 @@ export class Engine {
       if (intersects(this.shark.bounds(), c.bounds())) {
         this.coinsCollected++
         if (this.soundsReady) playSound('coin', 0.5)
-        this.particles.emit(c.x, c.y, 12) // 💥 partículas neon
+        this.particles.emit(c.x, c.y, 12)
         this.hooks.onCoins?.(this.coinsCollected)
         this.coins = this.coins.filter(x => x !== c)
       }
     }
 
-    // === Atualiza partículas ===
     this.particles.update(dt)
 
     // === Colisão com obstáculos ===
@@ -139,16 +141,14 @@ export class Engine {
     }
   }
 
-  private draw() {
+  draw() {
     const ctx = this.ctx
     const { width: w, height: h } = this.canvas
 
-    // fundo neon
     ctx.clearRect(0, 0, w, h)
     ctx.fillStyle = '#0b0f17'
     ctx.fillRect(0, 0, w, h)
 
-    // linhas do chão
     ctx.save()
     ctx.strokeStyle = 'rgba(0,191,255,0.15)'
     ctx.lineWidth = 1
@@ -160,7 +160,6 @@ export class Engine {
     }
     ctx.restore()
 
-    // chão principal
     ctx.save()
     ctx.strokeStyle = '#00bfff'
     ctx.globalAlpha = 0.6
@@ -171,13 +170,11 @@ export class Engine {
     ctx.globalAlpha = 1
     ctx.restore()
 
-    // entidades
     this.shark.draw(ctx)
     for (const o of this.obstacles) o.draw(ctx)
     for (const c of this.coins) c.draw(ctx)
     this.particles.draw(ctx)
 
-    // HUD
     ctx.save()
     ctx.fillStyle = '#00bfff'
     ctx.font = '600 16px Inter, sans-serif'
@@ -186,7 +183,7 @@ export class Engine {
     ctx.restore()
   }
 
-  private gameOver() {
+  gameOver() {
     this.running = false
     stopBackgroundMusic()
     this.hooks.onGameOver?.(this.score, this.coinsCollected)
